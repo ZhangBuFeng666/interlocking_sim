@@ -1,0 +1,5 @@
+#!/bin/zsh
+APP_DIR="$(cd "$(dirname "$0")/../../.." && pwd)"
+cd "$APP_DIR"
+export TK_SILENCE_DEPRECATION=1
+exec /usr/bin/python3 main.py
