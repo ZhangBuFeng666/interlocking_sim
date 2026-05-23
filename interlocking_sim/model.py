@@ -58,7 +58,7 @@ class Train:
 
     @property
     def current_track(self) -> Optional[str]:
-        if not self.active or self.index >= len(self.segments):
+        if not self.active or self.index < 0 or self.index >= len(self.segments):
             return None
         return self.segments[self.index]
 

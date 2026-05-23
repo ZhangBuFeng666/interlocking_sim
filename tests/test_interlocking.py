@@ -15,6 +15,9 @@ class InterlockingTests(unittest.TestCase):
         self.assertTrue(self.state.switches["1"].locked)
         self.assertTrue(self.state.switches["4"].locked)
         self.assertEqual(self.state.signals["X"].aspect, SignalAspect.GREEN)
+        self.assertEqual(self.state.tracks["JXG"].state, TrackState.CLEAR)
+        for _ in range(4):
+            self.ctrl.tick()
         self.assertEqual(self.state.tracks["JXG"].state, TrackState.OCCUPIED)
 
     def test_all_required_routes_exist(self):
@@ -53,12 +56,23 @@ class InterlockingTests(unittest.TestCase):
 
     def test_manual_unlock_countdown(self):
         self.assertTrue(self.ctrl.request_route("X至1G接车"))
+        for _ in range(4):
+            self.ctrl.tick()
         self.assertFalse(self.ctrl.cancel_route("X至1G接车"))
         self.assertTrue(self.ctrl.cancel_route("X至1G接车", manual=True))
         for _ in range(5):
             self.ctrl.tick()
         self.assertFalse(self.state.routes["X至1G接车"].locked)
         self.assertFalse(self.state.switches["3"].locked)
+
+    def test_normal_cancel_before_train_enters(self):
+        self.assertTrue(self.ctrl.request_route("X至IIG接车"))
+        self.assertTrue(self.ctrl.cancel_route("X至IIG接车"))
+        self.assertEqual(self.state.routes["X至IIG接车"].cancel_countdown, 2)
+        for _ in range(2):
+            self.ctrl.tick()
+        self.assertFalse(self.state.routes["X至IIG接车"].locked)
+        self.assertTrue(all(t.state == TrackState.CLEAR for t in self.state.tracks.values()))
 
     def test_auto_unlock_refuses_occupied_then_releases_clear_route(self):
         self.assertTrue(self.ctrl.request_route("D2至IIG调车", create_train=False))
@@ -70,7 +84,7 @@ class InterlockingTests(unittest.TestCase):
 
     def test_train_simulation_releases_route(self):
         self.assertTrue(self.ctrl.request_route("D1至1G调车"))
-        for _ in range(8):
+        for _ in range(11):
             self.ctrl.tick()
         self.assertFalse(self.state.routes["D1至1G调车"].locked)
         self.assertTrue(all(t.state == TrackState.CLEAR for t in self.state.tracks.values()))

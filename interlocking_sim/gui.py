@@ -246,6 +246,9 @@ class InterlockingApp(tk.Tk):
 
     def _draw_status(self) -> None:
         lines = [f"仿真秒: {self.state_model.tick_no}", f"当前进路: {self.state_model.current_route or '无'}", ""]
+        lines.append("操作提示:")
+        lines.extend(self.state_model.messages[-10:] or ["暂无"])
+        lines.append("")
         lines.append("进路状态:")
         for route in self.state_model.routes.values():
             cd = f", 倒计时 {route.cancel_countdown}s" if route.cancel_countdown else ""
@@ -262,10 +265,10 @@ class InterlockingApp(tk.Tk):
             lines.append(f"道岔{sw.name}: {sw.position.value} {'/'.join(flags) if flags else '可用'}")
         lines.append("\n轨道状态:")
         lines.append("  ".join(f"{k}:{v.state.value}" for k, v in self.state_model.tracks.items()))
-        lines.append("\n操作提示:")
-        lines.extend(self.state_model.messages[-10:])
+        top = self.status_text.yview()[0]
         self.status_text.delete("1.0", tk.END)
         self.status_text.insert(tk.END, "\n".join(lines))
+        self.status_text.yview_moveto(top)
 
 
 def main() -> None:

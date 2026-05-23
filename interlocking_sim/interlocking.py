@@ -49,10 +49,9 @@ class InterlockingController:
         self.state.current_route = route.name
         self._set_signal(route.signal, SignalAspect.GREEN)
         if create_train:
-            train = Train(f"T{len(self.state.trains) + 1}", route.name, list(route.tracks), dwell_ticks=1)
+            train = Train(f"T{len(self.state.trains) + 1}", route.name, list(route.tracks), index=-1, dwell_ticks=3)
             route.train = train
             self.state.trains[train.name] = train
-            self.state.tracks[train.segments[0]].state = TrackState.OCCUPIED
         self.state.note(f"{route.kind}进路{route_name}建立，{route.signal}开放")
         return True
 
@@ -200,6 +199,8 @@ class InterlockingController:
             if current:
                 self.state.tracks[current].state = TrackState.CLEAR
             train.index += 1
+            if train.index == 0:
+                self.state.note(f"列车{train.name}进入进路{train.route_name}")
             if train.index >= len(train.segments):
                 train.active = False
                 self.state.note(f"列车{train.name}驶出进路{train.route_name}")
@@ -229,6 +230,8 @@ class InterlockingController:
         for sw_name in route.switches:
             self.state.switches[sw_name].locked = False
         self._set_signal(route.signal, SignalAspect.RED)
+        if route.train:
+            route.train.active = False
         route.train = None
         if self.state.current_route == route_name:
             self.state.current_route = None
