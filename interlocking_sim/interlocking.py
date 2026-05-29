@@ -45,14 +45,15 @@ class InterlockingController:
         for sw_name in route.switches:
             self.state.switches[sw_name].locked = True
         route.locked = True
+        route.establishing = True
+        route.pending_train = create_train
         route.cancel_countdown = 0
         self.state.current_route = route.name
-        self._set_signal(route.signal, SignalAspect.GREEN)
-        if create_train:
-            train = Train(f"T{len(self.state.trains) + 1}", route.name, list(route.tracks), index=-1, dwell_ticks=3)
-            route.train = train
-            self.state.trains[train.name] = train
-        self.state.note(f"{route.kind}进路{route_name}建立，{route.signal}开放")
+        if self._route_switches_ready(route):
+            self._complete_route_setup(route)
+        else:
+            self._set_signal(route.signal, SignalAspect.RED)
+            self.state.note(f"{route.kind}进路{route_name}锁闭，等待道岔到位后开放{route.signal}")
         return True
 
     def cancel_route(self, route_name: str | None = None, manual: bool = False) -> bool:
@@ -67,6 +68,8 @@ class InterlockingController:
         if occupied and not manual:
             self.state.note(f"拒绝取消{route.name}: 进路占用，需人工解锁")
             return False
+        route.establishing = False
+        route.pending_train = False
         route.cancel_countdown = 5 if manual else 2
         self._set_signal(route.signal, SignalAspect.RED)
         self.state.note(f"{route.name}开始{'人工' if manual else '正常'}解锁倒计时{route.cancel_countdown}s")
@@ -149,6 +152,8 @@ class InterlockingController:
     def reset(self) -> None:
         for route in self.state.routes.values():
             route.locked = False
+            route.establishing = False
+            route.pending_train = False
             route.cancel_countdown = 0
             route.train = None
         for switch in self.state.switches.values():
@@ -187,6 +192,9 @@ class InterlockingController:
                 route.cancel_countdown -= 1
                 if route.cancel_countdown == 0:
                     self._release_route(route.name)
+                continue
+            if route.locked and route.establishing and self._route_switches_ready(route):
+                self._complete_route_setup(route)
 
     def _tick_trains(self) -> None:
         for train in list(self.state.trains.values()):
@@ -226,6 +234,8 @@ class InterlockingController:
     def _release_route(self, route_name: str) -> None:
         route = self.state.routes[route_name]
         route.locked = False
+        route.establishing = False
+        route.pending_train = False
         route.cancel_countdown = 0
         for sw_name in route.switches:
             self.state.switches[sw_name].locked = False
@@ -240,3 +250,16 @@ class InterlockingController:
     def _set_signal(self, signal_name: str, aspect: SignalAspect) -> None:
         sig = self.state.signals[signal_name]
         sig.aspect = SignalAspect.BROKEN if sig.broken else aspect
+
+    def _route_switches_ready(self, route) -> bool:
+        return all(self.state.switches[name].position == required for name, required in route.switches.items())
+
+    def _complete_route_setup(self, route) -> None:
+        route.establishing = False
+        self._set_signal(route.signal, SignalAspect.GREEN)
+        if route.pending_train:
+            train = Train(f"T{len(self.state.trains) + 1}", route.name, list(route.tracks), index=-1, dwell_ticks=3)
+            route.train = train
+            self.state.trains[train.name] = train
+        route.pending_train = False
+        self.state.note(f"{route.kind}进路{route.name}建立，{route.signal}开放")

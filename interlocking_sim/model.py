@@ -72,6 +72,8 @@ class Route:
     switches: Dict[str, SwitchPosition]
     conflicting_routes: List[str]
     locked: bool = False
+    establishing: bool = False
+    pending_train: bool = False
     cancel_countdown: int = 0
     train: Optional[Train] = None
 
@@ -115,12 +117,12 @@ def build_station() -> StationState:
         "X至3G接车": Route("X至3G接车", "列车", "X", ["JXG", "IIAG-A", "IIAG-B", "3G-L", "3G-M", "3G-R"], {"1": SwitchPosition.REVERSE, "4": SwitchPosition.REVERSE}, []),
         "X至IIG接车": Route("X至IIG接车", "列车", "X", ["JXG", "IIAG-A", "IIAG-B", "IIG-L", "IIG-M", "IIG-R"], {"1": SwitchPosition.NORMAL, "3": SwitchPosition.NORMAL, "4": SwitchPosition.NORMAL}, []),
         "X至1G接车": Route("X至1G接车", "列车", "X", ["JXG", "IIAG-A", "IIAG-B", "1G-L", "1G-M", "1G-R", "1G-RT"], {"3": SwitchPosition.REVERSE, "2": SwitchPosition.REVERSE}, []),
-        "3G至S发车": Route("3G至S发车", "列车", "S3", ["3G-M", "3G-R", "右咽喉", "IIBG-A", "IIBG-B", "JSG"], {"4": SwitchPosition.REVERSE}, []),
+        "3G至S发车": Route("3G至S发车", "列车", "S3", ["3G-M", "3G-R", "右咽喉", "IIBG-A", "IIBG-B", "JSG"], {"4": SwitchPosition.REVERSE, "2": SwitchPosition.NORMAL}, []),
         "IIG至S发车": Route("IIG至S发车", "列车", "SII", ["IIG-M", "IIG-R", "右咽喉", "IIBG-A", "IIBG-B", "JSG"], {"4": SwitchPosition.NORMAL, "2": SwitchPosition.NORMAL}, []),
         "1G至S发车": Route("1G至S发车", "列车", "S1", ["1G-M", "1G-R", "1G-RT", "IIBG-A", "IIBG-B", "JSG"], {"2": SwitchPosition.REVERSE}, []),
         "X至S通过": Route("X至S通过", "列车", "X", ["JXG", "IIAG-A", "IIAG-B", "IIG-L", "IIG-M", "IIG-R", "右咽喉", "IIBG-A", "IIBG-B", "JSG"], {"1": SwitchPosition.NORMAL, "3": SwitchPosition.NORMAL, "4": SwitchPosition.NORMAL, "2": SwitchPosition.NORMAL}, []),
         "D1至1G调车": Route("D1至1G调车", "调车", "D1", ["IIAG-B", "1G-L", "1G-M"], {"3": SwitchPosition.REVERSE}, []),
-        "D2至IIG调车": Route("D2至IIG调车", "调车", "D2", ["IIBG-A", "右咽喉", "IIG-R", "IIG-M"], {"4": SwitchPosition.NORMAL}, []),
+        "D2至IIG调车": Route("D2至IIG调车", "调车", "D2", ["IIBG-A", "右咽喉", "IIG-R", "IIG-M"], {"2": SwitchPosition.NORMAL, "4": SwitchPosition.NORMAL}, []),
         "安全线调车": Route("安全线调车", "调车", "PZA", ["安全线-A", "安全线-B", "1G-M"], {"5": SwitchPosition.REVERSE}, []),
     }
     route_names = list(routes)

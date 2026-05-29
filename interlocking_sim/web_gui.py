@@ -45,17 +45,30 @@ HTML = """<!doctype html>
       <div class="panel"><h2>单道岔操作、单锁、封锁</h2><div id="switches"></div></div>
     </section>
     <aside>
-      <div class="panel"><h2>信号故障仿真</h2><button onclick="post('/signal?name=X')">X断丝/恢复</button><button onclick="post('/signal?name=S')">S断丝/恢复</button></div>
+      <div class="panel"><h2>进路控制</h2><button onclick="post('/auto')">自动解锁</button><button onclick="post('/clear')">清除所有进路</button><button class="warn" onclick="post('/train_enter')">模拟列车进入</button><button onclick="post('/train_clear')">模拟列车出清</button><button class="danger" onclick="post('/reset')">重置系统</button></div>
+      <div class="panel"><h2>轨道占压仿真</h2><div id="trackControls"></div></div>
+      <div class="panel"><h2>信号故障仿真</h2><div id="signalControls"></div></div>
       <div class="panel"><h2>动态提示/状态</h2><pre id="status"></pre></div>
     </aside>
   </main>
 <script>
-const trackLines = {JXG:[[50,170,120,170]],IIAG:[[120,170,250,170]],'3G':[[250,170,330,90],[330,90,780,90],[780,90,880,170]],IIG:[[250,170,880,170]],'1G':[[320,170,420,245],[420,245,880,245],[880,245,950,170]],IIBG:[[950,170,1060,170]],JSG:[[1060,170,1150,170]],'安全线':[[210,245,300,245]]};
+const trackLines = {
+  JXG:[[50,170,120,170]], 'IIAG-A':[[120,170,185,170]], 'IIAG-B':[[185,170,250,170]],
+  '3G-L':[[250,170,330,90]], '3G-M':[[330,90,780,90]], '3G-R':[[780,90,880,170]],
+  'IIG-L':[[250,170,460,170]], 'IIG-M':[[460,170,670,170]], 'IIG-R':[[670,170,880,170]],
+  '1G-L':[[320,170,420,245]], '1G-M':[[420,245,680,245]], '1G-R':[[680,245,880,245]], '1G-RT':[[880,245,950,170]],
+  '右咽喉':[[880,170,950,170]], 'IIBG-A':[[950,170,1010,170]], 'IIBG-B':[[1010,170,1060,170]], JSG:[[1060,170,1150,170]],
+  '安全线-A':[[210,245,300,245]], '安全线-B':[[300,245,420,245]]
+};
 const signals = {X:[120,150],D1:[180,150],S3:[430,110],SII:[430,190],S1:[430,265],PZA:[330,275],X3:[760,110],XII:[760,190],X1:[760,265],D2:[1010,190],S:[1070,190]};
 const signalTrackY = {X:170,D1:170,S3:90,SII:170,S1:245,PZA:245,X3:90,XII:170,X1:245,D2:170,S:170};
+const buttonSignals = new Set(['S3','SII','S1','X3','XII','X1']);
+const terminalPoints = new Set(['PZA']);
 const switchMarks = {'1':[250,170],'3':[320,170],'5':[360,245],'4':[880,170],'2':[950,170]};
 let routeNames = [];
 let switchNames = [];
+let trackNames = [];
+let signalNames = [];
 let currentData = __INITIAL_STATE__;
 
 async function post(path) { await fetch(path, {method:'POST'}); await load(); }
@@ -76,10 +89,20 @@ function renderControls(data) {
     switchNames = Object.keys(data.switches);
     document.getElementById('switches').innerHTML = switchNames.map(n => `<div><b>${n}</b><button onclick="post('/switch?name=${encodeURIComponent(n)}&target=NORMAL')">定操</button><button onclick="post('/switch?name=${encodeURIComponent(n)}&target=REVERSE')">反操</button><button class="warn" onclick="post('/lock?name=${encodeURIComponent(n)}&value=1')">单锁</button><button onclick="post('/lock?name=${encodeURIComponent(n)}&value=0')">单解</button><button class="danger" onclick="post('/block?name=${encodeURIComponent(n)}&value=1')">封锁</button><button onclick="post('/block?name=${encodeURIComponent(n)}&value=0')">解封</button></div>`).join('');
   }
+  if (!trackNames.length) {
+    trackNames = Object.keys(data.tracks);
+    document.getElementById('trackControls').innerHTML = trackNames.map(n => `<div><b>${n}</b><button class="warn" onclick="post('/track?name=${encodeURIComponent(n)}&value=1')">占用</button><button onclick="post('/track?name=${encodeURIComponent(n)}&value=0')">出清</button></div>`).join('');
+  }
+  if (!signalNames.length) {
+    signalNames = Object.keys(data.signals);
+    document.getElementById('signalControls').innerHTML = signalNames.map(n => `<button onclick="post('/signal?name=${encodeURIComponent(n)}')">${n}断丝/恢复</button>`).join('');
+  }
 }
 function renderStatus(data) {
   const routes = Object.entries(data.routes).map(([n,r]) => `${n}: ${r.locked ? '锁闭' : '未锁'}${r.cancel_countdown ? ', 解锁倒计时 '+r.cancel_countdown+'s' : ''}`);
-  document.getElementById('status').textContent = `仿真秒: ${data.tick_no}\n\n进路状态:\n${routes.join('\n')}\n\n操作提示:\n${data.messages.join('\n')}`;
+  const switches = Object.entries(data.switches).map(([n,s]) => `道岔${n}: ${s.position}${s.locked ? '/进路锁闭' : ''}${s.single_locked ? '/单锁' : ''}${s.blocked ? '/封锁' : ''}`);
+  const occupied = Object.entries(data.tracks).filter(([,v]) => v === '占压').map(([n]) => n).join('、') || '无';
+  document.getElementById('status').textContent = `仿真秒: ${data.tick_no}\n当前进路: ${data.current_route || '无'}\n\n进路状态:\n${routes.join('\n')}\n\n道岔状态:\n${switches.join('\n')}\n\n占压轨道: ${occupied}\n\n操作提示:\n${data.messages.join('\n')}`;
 }
 function draw(data) {
   const c = document.getElementById('yard'), ctx = c.getContext('2d');
@@ -109,8 +132,14 @@ function draw(data) {
   drawLegend(ctx);
 }
 function drawSignal(ctx, name, x, y, aspect) {
+  if (terminalPoints.has(name)) {
+    ctx.strokeStyle = '#4b5563'; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(x, signalTrackY[name]); ctx.lineTo(x, y-8); ctx.stroke(); ctx.lineWidth = 1;
+    ctx.fillStyle = '#ffffff'; ctx.beginPath(); ctx.arc(x, y, 7, 0, Math.PI*2); ctx.fill(); ctx.strokeStyle = '#6b7280'; ctx.lineWidth = 2; ctx.stroke(); ctx.lineWidth = 1;
+    ctx.fillStyle = '#111827'; ctx.font = '12px Arial'; ctx.fillText(name, x+10, y+20);
+    return;
+  }
   ctx.strokeStyle = '#4b5563'; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(x, signalTrackY[name]); ctx.lineTo(x, y < signalTrackY[name] ? y+9 : y-9); ctx.stroke(); ctx.lineWidth = 1;
-  drawButtonSquare(ctx, x+26, y);
+  if (buttonSignals.has(name)) drawButtonSquare(ctx, x+32, signalTrackY[name]);
   const colors = aspect === '开放' ? ['#22c55e', '#22c55e'] : aspect === '断丝' ? ['#f97316', '#f97316'] : ['#bfc5cf', '#bfc5cf'];
   ctx.fillStyle = colors[0]; ctx.beginPath(); ctx.arc(x, y, 5, 0, Math.PI*2); ctx.fill(); ctx.strokeStyle='#111827'; ctx.stroke();
   ctx.fillStyle = colors[1]; ctx.beginPath(); ctx.arc(x+19, y, 5, 0, Math.PI*2); ctx.fill(); ctx.strokeStyle='#111827'; ctx.stroke();
@@ -155,6 +184,10 @@ class Handler(BaseHTTPRequestHandler):
                 CTRL.cancel_route(args["name"])
             elif parsed.path == "/manual":
                 CTRL.cancel_route(args["name"], manual=True)
+            elif parsed.path == "/auto":
+                CTRL.auto_unlock()
+            elif parsed.path == "/clear":
+                CTRL.clear_all_routes()
             elif parsed.path == "/switch":
                 target = SwitchPosition.NORMAL if args["target"] == "NORMAL" else SwitchPosition.REVERSE
                 CTRL.move_switch(args["name"], target)
@@ -165,6 +198,14 @@ class Handler(BaseHTTPRequestHandler):
             elif parsed.path == "/signal":
                 sig = STATE.signals[args["name"]]
                 CTRL.set_signal_broken(args["name"], not sig.broken)
+            elif parsed.path == "/track":
+                CTRL.set_track_occupied(args["name"], args["value"] == "1")
+            elif parsed.path == "/train_enter":
+                CTRL.simulate_train_enter()
+            elif parsed.path == "/train_clear":
+                CTRL.simulate_train_clear()
+            elif parsed.path == "/reset":
+                CTRL.reset()
         self._json({"ok": True})
 
     def log_message(self, fmt: str, *args: object) -> None:
@@ -191,6 +232,7 @@ def snapshot() -> dict:
     with LOCK:
         return {
             "tick_no": STATE.tick_no,
+            "current_route": STATE.current_route,
             "tracks": {k: v.state.value for k, v in STATE.tracks.items()},
             "signals": {k: v.aspect.value for k, v in STATE.signals.items()},
             "switches": {k: {"position": v.position.value, "locked": v.locked, "single_locked": v.single_locked, "blocked": v.blocked} for k, v in STATE.switches.items()},

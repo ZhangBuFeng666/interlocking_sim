@@ -14,9 +14,15 @@ class InterlockingTests(unittest.TestCase):
         self.assertTrue(self.state.routes["X至3G接车"].locked)
         self.assertTrue(self.state.switches["1"].locked)
         self.assertTrue(self.state.switches["4"].locked)
+        self.assertEqual(self.state.switches["1"].position, SwitchPosition.MOVING)
+        self.assertEqual(self.state.signals["X"].aspect, SignalAspect.RED)
+        self.ctrl.tick()
+        self.assertEqual(self.state.signals["X"].aspect, SignalAspect.RED)
+        self.ctrl.tick()
         self.assertEqual(self.state.signals["X"].aspect, SignalAspect.GREEN)
+        self.assertEqual(self.state.switches["1"].position, SwitchPosition.REVERSE)
         self.assertEqual(self.state.tracks["JXG"].state, TrackState.CLEAR)
-        for _ in range(4):
+        for _ in range(3):
             self.ctrl.tick()
         self.assertEqual(self.state.tracks["JXG"].state, TrackState.OCCUPIED)
 
@@ -56,7 +62,7 @@ class InterlockingTests(unittest.TestCase):
 
     def test_manual_unlock_countdown(self):
         self.assertTrue(self.ctrl.request_route("X至1G接车"))
-        for _ in range(4):
+        for _ in range(5):
             self.ctrl.tick()
         self.assertFalse(self.ctrl.cancel_route("X至1G接车"))
         self.assertTrue(self.ctrl.cancel_route("X至1G接车", manual=True))
@@ -88,6 +94,30 @@ class InterlockingTests(unittest.TestCase):
             self.ctrl.tick()
         self.assertFalse(self.state.routes["D1至1G调车"].locked)
         self.assertTrue(all(t.state == TrackState.CLEAR for t in self.state.tracks.values()))
+
+    def test_every_route_can_complete_and_auto_release(self):
+        for route_name in build_station().routes:
+            with self.subTest(route_name=route_name):
+                state = build_station()
+                ctrl = InterlockingController(state)
+                self.assertTrue(ctrl.request_route(route_name))
+                for _ in range(40):
+                    ctrl.tick()
+                self.assertFalse(state.routes[route_name].locked)
+                self.assertEqual(state.signals[state.routes[route_name].signal].aspect, SignalAspect.RED)
+                self.assertTrue(all(track.state == TrackState.CLEAR for track in state.tracks.values()))
+
+    def test_right_throat_routes_require_switch_2_normal(self):
+        for route_name in ["3G至S发车", "D2至IIG调车"]:
+            with self.subTest(route_name=route_name):
+                state = build_station()
+                ctrl = InterlockingController(state)
+                self.assertTrue(ctrl.move_switch("2", SwitchPosition.REVERSE))
+                ctrl.tick()
+                ctrl.tick()
+                ctrl.set_switch_lock("2", True)
+                self.assertFalse(ctrl.request_route(route_name))
+                self.assertIn("道岔2单锁且位置不符", state.messages[-1])
 
     def test_routes_use_fine_grained_track_segments(self):
         self.assertIn("3G-L", self.state.routes["X至3G接车"].tracks)
