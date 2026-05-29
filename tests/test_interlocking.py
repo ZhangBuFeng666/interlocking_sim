@@ -2,6 +2,7 @@ import unittest
 
 from interlocking_sim.interlocking import InterlockingController
 from interlocking_sim.model import SignalAspect, SwitchPosition, TrackState, build_station
+from interlocking_sim.web_gui import Handler
 
 
 class InterlockingTests(unittest.TestCase):
@@ -124,6 +125,46 @@ class InterlockingTests(unittest.TestCase):
         self.assertIn("3G-M", self.state.routes["X至3G接车"].tracks)
         self.assertIn("3G-R", self.state.routes["X至3G接车"].tracks)
         self.assertGreater(len(self.state.routes["X至S通过"].tracks), 8)
+
+
+class WebHandlerValidationTests(unittest.TestCase):
+    @staticmethod
+    def _call_post(path: str):
+        handler = Handler.__new__(Handler)
+        handler.path = path
+        captured = {}
+
+        def capture_json(obj, status=200):
+            captured["obj"] = obj
+            captured["status"] = status
+
+        handler._json = capture_json
+        handler.do_POST()
+        return captured
+
+    def test_post_route_missing_name_returns_400(self):
+        res = self._call_post("/route")
+        self.assertEqual(res["status"], 400)
+        self.assertFalse(res["obj"]["ok"])
+        self.assertIn("缺少参数: name", res["obj"]["error"])
+
+    def test_post_track_invalid_bool_returns_400(self):
+        res = self._call_post("/track?name=JXG&value=2")
+        self.assertEqual(res["status"], 400)
+        self.assertFalse(res["obj"]["ok"])
+        self.assertIn("仅支持 0 或 1", res["obj"]["error"])
+
+    def test_post_unknown_endpoint_returns_400(self):
+        res = self._call_post("/not-exists")
+        self.assertEqual(res["status"], 400)
+        self.assertFalse(res["obj"]["ok"])
+        self.assertIn("未知接口", res["obj"]["error"])
+
+    def test_post_signal_unknown_name_returns_400(self):
+        res = self._call_post("/signal?name=NOT_FOUND")
+        self.assertEqual(res["status"], 400)
+        self.assertFalse(res["obj"]["ok"])
+        self.assertIn("参数或名称不存在", res["obj"]["error"])
 
 
 if __name__ == "__main__":

@@ -167,6 +167,20 @@ setInterval(load, 1000); load();
 
 
 class Handler(BaseHTTPRequestHandler):
+    def _required(self, args: dict, key: str) -> str:
+        value = args.get(key)
+        if not value:
+            raise ValueError(f"缺少参数: {key}")
+        return value
+
+    @staticmethod
+    def _bool01(raw: str, key: str) -> bool:
+        if raw == "1":
+            return True
+        if raw == "0":
+            return False
+        raise ValueError(f"{key} 仅支持 0 或 1")
+
     def do_GET(self) -> None:
         parsed = urlparse(self.path)
         if parsed.path == "/state":
@@ -177,36 +191,56 @@ class Handler(BaseHTTPRequestHandler):
     def do_POST(self) -> None:
         parsed = urlparse(self.path)
         args = {k: v[0] for k, v in parse_qs(parsed.query).items()}
-        with LOCK:
-            if parsed.path == "/route":
-                CTRL.request_route(args["name"])
-            elif parsed.path == "/cancel":
-                CTRL.cancel_route(args["name"])
-            elif parsed.path == "/manual":
-                CTRL.cancel_route(args["name"], manual=True)
-            elif parsed.path == "/auto":
-                CTRL.auto_unlock()
-            elif parsed.path == "/clear":
-                CTRL.clear_all_routes()
-            elif parsed.path == "/switch":
-                target = SwitchPosition.NORMAL if args["target"] == "NORMAL" else SwitchPosition.REVERSE
-                CTRL.move_switch(args["name"], target)
-            elif parsed.path == "/lock":
-                CTRL.set_switch_lock(args["name"], args["value"] == "1")
-            elif parsed.path == "/block":
-                CTRL.set_switch_block(args["name"], args["value"] == "1")
-            elif parsed.path == "/signal":
-                sig = STATE.signals[args["name"]]
-                CTRL.set_signal_broken(args["name"], not sig.broken)
-            elif parsed.path == "/track":
-                CTRL.set_track_occupied(args["name"], args["value"] == "1")
-            elif parsed.path == "/train_enter":
-                CTRL.simulate_train_enter()
-            elif parsed.path == "/train_clear":
-                CTRL.simulate_train_clear()
-            elif parsed.path == "/reset":
-                CTRL.reset()
-        self._json({"ok": True})
+        try:
+            with LOCK:
+                if parsed.path == "/route":
+                    CTRL.request_route(self._required(args, "name"))
+                elif parsed.path == "/cancel":
+                    CTRL.cancel_route(self._required(args, "name"))
+                elif parsed.path == "/manual":
+                    CTRL.cancel_route(self._required(args, "name"), manual=True)
+                elif parsed.path == "/auto":
+                    CTRL.auto_unlock()
+                elif parsed.path == "/clear":
+                    CTRL.clear_all_routes()
+                elif parsed.path == "/switch":
+                    target_raw = self._required(args, "target")
+                    if target_raw not in ("NORMAL", "REVERSE"):
+                        raise ValueError("target 仅支持 NORMAL 或 REVERSE")
+                    target = SwitchPosition.NORMAL if target_raw == "NORMAL" else SwitchPosition.REVERSE
+                    CTRL.move_switch(self._required(args, "name"), target)
+                elif parsed.path == "/lock":
+                    CTRL.set_switch_lock(
+                        self._required(args, "name"),
+                        self._bool01(self._required(args, "value"), "value"),
+                    )
+                elif parsed.path == "/block":
+                    CTRL.set_switch_block(
+                        self._required(args, "name"),
+                        self._bool01(self._required(args, "value"), "value"),
+                    )
+                elif parsed.path == "/signal":
+                    name = self._required(args, "name")
+                    sig = STATE.signals[name]
+                    CTRL.set_signal_broken(name, not sig.broken)
+                elif parsed.path == "/track":
+                    CTRL.set_track_occupied(
+                        self._required(args, "name"),
+                        self._bool01(self._required(args, "value"), "value"),
+                    )
+                elif parsed.path == "/train_enter":
+                    CTRL.simulate_train_enter()
+                elif parsed.path == "/train_clear":
+                    CTRL.simulate_train_clear()
+                elif parsed.path == "/reset":
+                    CTRL.reset()
+                else:
+                    raise ValueError(f"未知接口: {parsed.path}")
+            self._json({"ok": True})
+        except KeyError as exc:
+            self._json({"ok": False, "error": f"参数或名称不存在: {exc.args[0]}"}, status=400)
+        except ValueError as exc:
+            self._json({"ok": False, "error": str(exc)}, status=400)
 
     def log_message(self, fmt: str, *args: object) -> None:
         return
@@ -219,9 +253,9 @@ class Handler(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(data)
 
-    def _json(self, obj: object) -> None:
+    def _json(self, obj: object, status: int = 200) -> None:
         data = json.dumps(obj, ensure_ascii=False).encode("utf-8")
-        self.send_response(200)
+        self.send_response(status)
         self.send_header("Content-Type", "application/json; charset=utf-8")
         self.send_header("Content-Length", str(len(data)))
         self.end_headers()
