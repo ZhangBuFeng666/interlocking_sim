@@ -1,40 +1,39 @@
 import os
+import threading
+import webbrowser
 
 
 os.environ.setdefault("TK_SILENCE_DEPRECATION", "1")
 
-_FALLBACK_REASON = ""
 
+def main() -> None:
+    from interlocking_sim.web_gui import start_server
 
-def _select_entrypoint():
-    global _FALLBACK_REASON
+    url = start_server()
+
+    tk_gui = None
     try:
         import tkinter as tk
-    except Exception as exc:
-        _FALLBACK_REASON = f"Tk 不可用({exc.__class__.__name__})"
-        from interlocking_sim.web_gui import main as web_main
-        return web_main
+        if tk.TkVersion >= 8.5:
+            from interlocking_sim.gui import InterlockingApp
+            tk_gui = InterlockingApp
+    except Exception:
+        pass
 
-    if tk.TkVersion < 8.6:
-        _FALLBACK_REASON = f"Tk 版本过低({tk.TkVersion})"
-        from interlocking_sim.web_gui import main as web_main
-        return web_main
+    print(f"浏览器访问地址: {url}")
+    webbrowser.open(url)
 
-    try:
-        from interlocking_sim.gui import main as gui_main
-        return gui_main
-    except ModuleNotFoundError as exc:
-        if exc.name != "_tkinter":
-            raise
-        _FALLBACK_REASON = "缺少 _tkinter 扩展"
-        from interlocking_sim.web_gui import main as web_main
-        return web_main
-
-
-main = _select_entrypoint()
+    if tk_gui:
+        print("检测到 Tkinter，已同时启动桌面窗口（浏览器界面仍可用）。")
+        app = tk_gui()
+        app.mainloop()
+    else:
+        print("提示: 按 Ctrl+C 停止服务。")
+        try:
+            threading.Event().wait()
+        except KeyboardInterrupt:
+            pass
 
 
 if __name__ == "__main__":
-    if _FALLBACK_REASON:
-        print(f"检测到 {_FALLBACK_REASON}，自动切换到浏览器承载界面。")
     main()

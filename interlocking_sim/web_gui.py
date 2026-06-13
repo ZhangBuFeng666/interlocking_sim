@@ -14,6 +14,7 @@ from .model import SignalAspect, SwitchPosition, TrackState, build_station
 STATE = build_station()
 CTRL = InterlockingController(STATE)
 LOCK = threading.Lock()
+_SERVER: ThreadingHTTPServer | None = None
 
 
 HTML = """<!doctype html>
@@ -102,7 +103,7 @@ function renderStatus(data) {
   const routes = Object.entries(data.routes).map(([n,r]) => `${n}: ${r.locked ? '锁闭' : '未锁'}${r.cancel_countdown ? ', 解锁倒计时 '+r.cancel_countdown+'s' : ''}`);
   const switches = Object.entries(data.switches).map(([n,s]) => `道岔${n}: ${s.position}${s.locked ? '/进路锁闭' : ''}${s.single_locked ? '/单锁' : ''}${s.blocked ? '/封锁' : ''}`);
   const occupied = Object.entries(data.tracks).filter(([,v]) => v === '占压').map(([n]) => n).join('、') || '无';
-  document.getElementById('status').textContent = `仿真秒: ${data.tick_no}\n当前进路: ${data.current_route || '无'}\n\n进路状态:\n${routes.join('\n')}\n\n道岔状态:\n${switches.join('\n')}\n\n占压轨道: ${occupied}\n\n操作提示:\n${data.messages.join('\n')}`;
+  document.getElementById('status').textContent = '仿真秒: ' + data.tick_no + '\\n当前进路: ' + (data.current_route || '无') + '\\n\\n进路状态:\\n' + routes.join('\\n') + '\\n\\n道岔状态:\\n' + switches.join('\\n') + '\\n\\n占压轨道: ' + occupied + '\\n\\n操作提示:\\n' + data.messages.join('\\n');
 }
 function draw(data) {
   const c = document.getElementById('yard'), ctx = c.getContext('2d');
@@ -287,11 +288,20 @@ def tick_loop() -> None:
             CTRL.tick()
 
 
-def main() -> None:
+def start_server() -> str:
     threading.Thread(target=tick_loop, daemon=True).start()
-    server = ThreadingHTTPServer(("127.0.0.1", 8765), Handler)
-    url = "http://127.0.0.1:8765"
-    print("当前 Python 缺少 Tkinter，已启动单机软件上位机（本机浏览器承载界面）。")
-    print(f"访问地址: {url}")
+    global _SERVER
+    _SERVER = ThreadingHTTPServer(("127.0.0.1", 8765), Handler)
+    t = threading.Thread(target=_SERVER.serve_forever, daemon=True)
+    t.start()
+    return "http://127.0.0.1:8765"
+
+
+def main() -> None:
+    url = start_server()
     webbrowser.open(url)
-    server.serve_forever()
+    print(f"访问地址: {url}")
+    try:
+        threading.Event().wait()
+    except KeyboardInterrupt:
+        pass

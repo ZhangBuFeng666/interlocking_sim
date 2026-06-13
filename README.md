@@ -1,32 +1,70 @@
 # 计算机联锁模拟仿真系统
 
-运行环境：Python 3.10+，仅使用标准库 Tkinter 和 unittest。
+跨平台联锁模拟系统，支持 **Windows / macOS / Linux**。仅使用 Python 标准库，无外部依赖。
 
-运行桌面软件，推荐直接双击以下任一入口：
+---
 
-```text
-启动联锁模拟软件.command
-InterlockingSim.app
-```
+## 快速启动
 
-也可以用命令运行，注意 `main.py` 后面不要加中文句号：
+### 方式一：运行源码（所有平台）
 
-```bash
-/usr/bin/python3 main.py
-```
-
-macOS 自带 Python 通常包含 Tkinter，可直接运行桌面版软件：
+需要安装 Python 3.8+（[python.org](https://www.python.org/downloads/)），Tkinter 已内置在 Python 中。
 
 ```bash
-/usr/bin/python3 main.py
+python main.py
+# 或双击 run.bat (Windows) / run.sh (macOS/Linux)
 ```
 
-如果当前 Python 缺少 `_tkinter`，程序会自动切换到单机浏览器承载界面，并在浏览器打开 `http://127.0.0.1:8765`。该模式仍是本机软件的一部分，不依赖互联网或外部服务；功能与桌面版一致。
+程序将自动打开浏览器访问 `http://127.0.0.1:8765`。
 
-运行测试：
+### 方式二：macOS 独立 .app
+
+双击 `计算机联锁模拟仿真系统.app` 即可运行（已内置 Python 和 Tkinter）。
+
+### 方式三：Windows 独立 .exe
+
+在 Windows 上运行 `build_win.bat`，自动打包为 `dist/InterlockingSim.exe`：
+
+```cmd
+build_win.bat
+```
+
+---
+
+## 构建独立包
+
+### macOS
 
 ```bash
-python3 -m unittest discover -s tests
+./build_mac.sh        # 一键构建 .app
 ```
 
-项目包含上位机界面、后台联锁逻辑、现场设备仿真和测试文档。详细设计见 `docs/design.md`，测试报告见 `docs/test_report.md`。
+### Windows
+
+在 Windows 上运行：
+```cmd
+build_win.bat         # 自动安装 PyInstaller 并打包 .exe
+```
+
+---
+
+## 运行测试
+
+```bash
+python -m unittest discover -s tests
+```
+
+---
+
+## 项目结构
+
+| 文件 | 说明 |
+|------|------|
+| `main.py` | 入口：始终启动 Web 服务，可选 Tkinter 桌面窗口 |
+| `interlocking_sim/web_gui.py` | 浏览器 Web 界面（Canvas 站场图） |
+| `interlocking_sim/gui.py` | Tkinter 桌面界面 |
+| `interlocking_sim/model.py` | 数据模型（轨道、信号、道岔、进路） |
+| `interlocking_sim/interlocking.py` | 联锁逻辑控制器 |
+| `docs/` | 设计文档、测试报告、演示流程 |
+
+详细设计见 `docs/design.md`，测试报告见 `docs/test_report.md`。
