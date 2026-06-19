@@ -15,7 +15,7 @@ python main.py
 # 或双击 run.bat (Windows) / run.sh (macOS/Linux)
 ```
 
-程序将自动打开浏览器访问 `http://127.0.0.1:8765`。
+程序会优先启动 Tkinter 桌面窗口；如果当前环境缺少 Tkinter 或 Tk 版本过低，则自动切换为本机浏览器承载界面，并打开 `http://127.0.0.1:8765`。
 
 ### 方式二：macOS 独立 .app
 
@@ -60,7 +60,7 @@ python -m unittest discover -s tests
 
 | 文件 | 说明 |
 |------|------|
-| `main.py` | 入口：始终启动 Web 服务，可选 Tkinter 桌面窗口 |
+| `main.py` | 入口：优先启动 Tkinter 桌面窗口，Tk 不可用时回退到 Web 界面 |
 | `interlocking_sim/web_gui.py` | 浏览器 Web 界面（Canvas 站场图） |
 | `interlocking_sim/gui.py` | Tkinter 桌面界面 |
 | `interlocking_sim/model.py` | 数据模型（轨道、信号、道岔、进路） |

@@ -48,6 +48,6 @@ if errorlevel 1 (
 echo [4/4] 构建完成！
 echo.
 echo 输出文件: dist\InterlockingSim.exe
-echo 双击运行即可启动 Web 服务，浏览器将自动打开。
+echo 双击运行将优先启动桌面窗口；若 Tkinter 不可用，则自动启动浏览器界面。
 echo.
 pause
